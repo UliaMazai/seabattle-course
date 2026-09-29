@@ -9,10 +9,9 @@ export const FLEET: number[] = [
 ];
 
 export const COLORS = {
-  water: 'bg-sky-900',
-  ship: 'bg-slate-400',
-  hit: 'bg-red-500',
-  miss: 'bg-sky-700',
-  sunk: 'bg-red-800',
-  hover: 'bg-sky-700',
+  water: "bg-gradient-to-b from-cyan-500 to-blue-800",
+  ship: "bg-gradient-to-b from-slate-100 to-slate-400",
+  hit: "bg-gradient-to-b from-red-400 to-red-800",
+  miss: "bg-gradient-to-b from-sky-900 to-slate-900",
+  sunk: "bg-gradient-to-b from-red-900 to-slate-900",
 };
