@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Board } from "./components/Board";
-import { generateFleet } from "./game/logic";
-import type { Board as BoardType, Ship, CellState } from "./types";
+import { generateFleet, processShot, isFleetDestroyed } from "./game/logic";
+import type { Board as BoardType, Ship, CellState, Player } from "./types";
 
-// Скрывает корабли на поле (для отображения противника)
 function hideShips(board: BoardType): BoardType {
   return board.map((row) =>
     row.map((cell) => ({
@@ -18,7 +17,10 @@ function App() {
   const [enemyBoard, setEnemyBoard] = useState<BoardType>(() => generateFleet().board);
   const [playerShips, setPlayerShips] = useState<Ship[]>([]);
   const [enemyShips, setEnemyShips] = useState<Ship[]>([]);
+  const [turn, setTurn] = useState<Player>("human");
+  const [message, setMessage] = useState<string>("Сделайте выстрел по полю противника");
 
+  // Новая игра
   function newGame() {
     const player = generateFleet();
     const enemy = generateFleet();
@@ -26,8 +28,43 @@ function App() {
     setPlayerShips(player.ships);
     setEnemyBoard(enemy.board);
     setEnemyShips(enemy.ships);
-    console.log("Флот игрока:", player.ships);
-    console.log("Флот противника:", enemy.ships);
+    setTurn("human");
+    setMessage("Сделайте выстрел по полю противника");
+  }
+
+  // Выстрел игрока
+  function handleEnemyBoardClick(x: number, y: number) {
+    if (turn !== "human") return;
+
+    const outcome = processShot(enemyBoard, enemyShips, x, y);
+    if (!outcome) return; // уже стреляли
+
+    setEnemyBoard(outcome.newBoard);
+    setEnemyShips(outcome.newShips);
+
+    if (isFleetDestroyed(outcome.newShips)) {
+      setMessage("🏆 Вы победили! Весь флот противника уничтожен.");
+      setTurn("ai"); // блокируем ходы
+      return;
+    }
+
+    if (outcome.result.hit) {
+      setMessage(outcome.result.sunk ? "🔥 Корабль потоплен! Ваш ход снова." : "💥 Попадание! Ваш ход снова.");
+      // При попадании ход остаётся у игрока
+    } else {
+      setMessage("💧 Промах. Ход противника.");
+      setTurn("ai");
+      // Заглушка ИИ — реализуем в 5.3
+      setTimeout(() => {
+        setMessage("Сделайте выстрел по полю противника");
+        setTurn("human");
+      }, 1000);
+    }
+  }
+
+  // Инициализация: если флот пуст — сгенерировать
+  if (playerShips.length === 0 || enemyShips.length === 0) {
+    newGame();
   }
 
   return (
@@ -55,7 +92,7 @@ function App() {
         Морской бой
       </h1>
 
-      <div className="relative z-10 flex justify-center mb-8">
+      <div className="relative z-10 flex justify-center mb-4">
         <button
           onClick={newGame}
           className="
@@ -72,9 +109,19 @@ function App() {
         </button>
       </div>
 
+      {/* Статус-строка */}
+      <p className="relative z-10 text-center text-cyan-100 mb-6 text-lg font-semibold drop-shadow">
+        {message}
+      </p>
+
       <div className="relative z-10 flex flex-wrap justify-center gap-12">
         <Board board={playerBoard} title="Ваше поле" disabled />
-        <Board board={hideShips(enemyBoard)} title="Поле противника" />
+        <Board
+          board={hideShips(enemyBoard)}
+          title="Поле противника"
+          onCellClick={handleEnemyBoardClick}
+          disabled={turn !== "human"}
+        />
       </div>
     </div>
   );

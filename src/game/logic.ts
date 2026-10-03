@@ -1,4 +1,4 @@
-import type { Board, Ship, Orientation, CellState } from "../types";
+import type { Board, Ship, Orientation, CellState, ShotResult } from "../types";
 import { BOARD_SIZE, FLEET } from "./constants";
 
 // ===== Создание пустого поля =====
@@ -100,4 +100,83 @@ export function generateFleet(): { board: Board; ships: Ship[] } {
     if (result) return result;
     // Не получилось — пробуем заново (в редких случаях)
   }
+}
+
+// ===== Обработка выстрела по полю =====
+export function processShot(
+  board: Board,
+  ships: Ship[],
+  x: number,
+  y: number
+): { newBoard: Board; newShips: Ship[]; result: ShotResult } | null {
+  const cell = board[y][x];
+
+  // 1. Проверка: сюда уже стреляли?
+  if (cell.state === "hit" || cell.state === "miss" || cell.state === "sunk") {
+    return null; // повторный выстрел — игнорируем
+  }
+
+  // 2. Копия поля (React требует иммутабельности)
+  const newBoard: Board = board.map((row) => row.map((c) => ({ ...c })));
+  const newShips: Ship[] = ships.map((s) => ({ ...s, cells: [...s.cells] }));
+
+  // 3. Промах
+  if (cell.state === "empty" || cell.state === "unknown") {
+    newBoard[y][x].state = "miss";
+    return {
+      newBoard,
+      newShips,
+      result: { hit: false, sunk: false },
+    };
+  }
+
+  // 4. Попадание
+  if (cell.state === "ship") {
+    newBoard[y][x].state = "hit";
+
+    // 4.1. Ищем корабль, в который попали
+    const ship = newShips.find((s) =>
+      s.cells.some((c) => c.x === x && c.y === y)
+    );
+
+    if (!ship) {
+      // Странная ситуация — не должно случаться, но подстрахуемся
+      return {
+        newBoard,
+        newShips,
+        result: { hit: true, sunk: false },
+      };
+    }
+
+    // 4.2. Проверяем, потоплен ли корабль
+    const allHit = ship.cells.every((c) => newBoard[c.y][c.x].state === "hit");
+
+    if (allHit) {
+      ship.sunk = true;
+      // Помечаем все клетки корабля как "sunk" для красивого отображения
+      ship.cells.forEach((c) => {
+        newBoard[c.y][c.x].state = "sunk";
+      });
+      return {
+        newBoard,
+        newShips,
+        result: { hit: true, sunk: true, shipId: ship.id },
+      };
+    }
+
+    // Попал, но корабль ещё жив
+    return {
+      newBoard,
+      newShips,
+      result: { hit: true, sunk: false, shipId: ship.id },
+    };
+  }
+
+  // Сюда не должны попадать
+  return null;
+}
+
+// ===== Проверка победы =====
+export function isFleetDestroyed(ships: Ship[]): boolean {
+  return ships.every((s) => s.sunk);
 }
