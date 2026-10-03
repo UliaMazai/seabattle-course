@@ -2,25 +2,23 @@ import type { Board, Ship } from "../types";
 import { BOARD_SIZE } from "./constants";
 import { processShot } from "./logic";
 
+interface Target {
+  firstHit: { x: number; y: number };
+  direction: "horizontal" | "vertical" | null;
+  nextStep: -1 | 1;
+}
+
 export interface AIState {
   mode: "hunt" | "target";
   triedCells: Set<string>;
-  firstHit: { x: number; y: number } | null;
-  direction: "horizontal" | "vertical" | null;
-  // Куда двигаться в следующий раз:
-  // -1 = в сторону уменьшения (влево/вверх)
-  // +1 = в сторону увеличения (вправо/вниз)
-  // null = линия ещё не определена
-  nextStep: -1 | 1 | null;
+  targets: Target[];
 }
 
 export function createAIState(): AIState {
   return {
     mode: "hunt",
     triedCells: new Set(),
-    firstHit: null,
-    direction: null,
-    nextStep: null,
+    targets: [],
   };
 }
 
@@ -46,7 +44,6 @@ function isCellAvailable(board: Board, x: number, y: number): boolean {
   return s === "empty" || s === "unknown" || s === "ship";
 }
 
-// ===== Пометить окружение потопленного корабля как "не стрелять" =====
 export function markSunkSurroundings(
   state: AIState,
   ships: Ship[],
@@ -67,78 +64,113 @@ export function markSunkSurroundings(
   }
 }
 
-// ===== Обновить состояние ИИ после выстрела =====
+// Обновить ИИ после выстрела.
+// sunkShipCells — массив клеток потопленного корабля (если sunk === true)
 export function updateAIAfterShot(
   state: AIState,
   x: number,
   y: number,
   hit: boolean,
-  sunk: boolean
+  sunk: boolean,
+  sunkShipCells?: { x: number; y: number }[]
 ) {
   markTried(state, x, y);
 
-  // Корабль потоплен — сбрасываем всё
   if (sunk) {
-    state.mode = "hunt";
-    state.firstHit = null;
-    state.direction = null;
-    state.nextStep = null;
-    return;
-  }
-
-  // Первое попадание
-  if (hit && state.firstHit === null) {
-    state.firstHit = { x, y };
-    state.mode = "target";
-    state.direction = null;
-    state.nextStep = -1; // начинаем искать влево/вверх
+    // Удаляем из списка целей те, чей firstHit лежит внутри потопленного корабля
+    if (sunkShipCells && sunkShipCells.length > 0) {
+      state.targets = state.targets.filter(
+        (t) =>
+          !sunkShipCells.some(
+            (c) => c.x === t.firstHit.x && c.y === t.firstHit.y
+          )
+      );
+    } else {
+      // Подстраховка: если не передали клетки — удаляем последнюю цель
+      state.targets.pop();
+    }
+    if (state.targets.length === 0) state.mode = "hunt";
     return;
   }
 
   if (!hit) {
-    // Промах. Если направление ещё не определено — значит,
-    // это был первый «щуп» от firstHit. Меняем сторону.
-    if (state.direction === null) {
-      state.nextStep = 1; // пробуем вправо/вниз
+    // Промах. Обрабатываем последнюю цель.
+    const target = state.targets[state.targets.length - 1];
+    if (!target) {
+      state.mode = "hunt";
       return;
     }
-    // Направление определено, промах в текущем направлении.
-    // Значит, в эту сторону корабля больше нет — переключаемся.
-    if (state.nextStep === -1) {
-      state.nextStep = 1;
+
+    if (target.direction === null) {
+      // Первое «щупание» промахнулось — пробуем другую сторону
+      if (target.nextStep === -1) {
+        target.nextStep = 1;
+      } else {
+        // Обе стороны пусты — цель ложная, удаляем
+        state.targets.pop();
+        if (state.targets.length === 0) state.mode = "hunt";
+      }
     } else {
-      // Мы прошли в обе стороны и не потопили — значит, корабль
-      // не найден. Сбрасываемся в поиск.
-      state.mode = "hunt";
-      state.firstHit = null;
-      state.direction = null;
-      state.nextStep = null;
+      // Направление известно, промах в текущую сторону — переключаемся
+      if (target.nextStep === -1) {
+        target.nextStep = 1;
+      } else {
+        // Обе стороны пройдены — цель добита, удаляем
+        state.targets.pop();
+        if (state.targets.length === 0) state.mode = "hunt";
+      }
     }
     return;
   }
+
+  // Попадание
+  // 1. Проверяем: попадание в клетку с уже существующей целью?
+  const exactTarget = state.targets.find(
+    (t) => t.firstHit.x === x && t.firstHit.y === y
+  );
+  if (exactTarget) return;
+
+  // 2. Проверяем: попадание рядом с существующей целью (определяем направление)?
+  const relatedTarget = state.targets.find((t) => {
+    const dx = Math.abs(t.firstHit.x - x);
+    const dy = Math.abs(t.firstHit.y - y);
+    return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+  });
+
+  if (relatedTarget && relatedTarget.direction === null) {
+    if (relatedTarget.firstHit.y === y) relatedTarget.direction = "horizontal";
+    else relatedTarget.direction = "vertical";
+    relatedTarget.nextStep = -1;
+    return;
+  }
+
+  // 3. Новая цель — попадание в новый корабль
+  state.mode = "target";
+  state.targets.push({
+    firstHit: { x, y },
+    direction: null,
+    nextStep: -1,
+  });
 }
 
-// ===== Выбрать следующий выстрел =====
 export function getAIShot(
   board: Board,
   state: AIState
 ): { x: number; y: number } | null {
   // 1. Режим добивания
-  if (state.mode === "target" && state.firstHit) {
-    const { x: fx, y: fy } = state.firstHit;
+  if (state.mode === "target" && state.targets.length > 0) {
+    const target = state.targets[state.targets.length - 1];
+    const { x: fx, y: fy } = target.firstHit;
 
-    // Если направление ещё не определено — стреляем в одного из 4 соседей
-    if (state.direction === null) {
+    // Направление не определено — стреляем в соседей firstHit
+    if (target.direction === null) {
       const dirs = [
         { dx: 0, dy: -1 },
         { dx: 0, dy: 1 },
         { dx: -1, dy: 0 },
         { dx: 1, dy: 0 },
       ];
-      // Пробуем в порядке приоритета nextStep
-      const ordered = state.nextStep === -1
-        ? dirs
-        : [...dirs].reverse();
+      const ordered = target.nextStep === -1 ? dirs : [...dirs].reverse();
       for (const { dx, dy } of ordered) {
         const nx = fx + dx;
         const ny = fy + dy;
@@ -147,36 +179,50 @@ export function getAIShot(
         if (!isCellAvailable(board, nx, ny)) continue;
         return { x: nx, y: ny };
       }
-      // Не нашли — сбрасываемся
-      state.mode = "hunt";
-      state.firstHit = null;
-      state.nextStep = null;
-      return null;
+      // Не нашли соседа — удаляем цель
+      state.targets.pop();
+      if (state.targets.length === 0) state.mode = "hunt";
+    } else {
+      // Направление известно. Идём по линии от firstHit,
+      // пропуская tried-клетки, пока не найдём доступную.
+      const dirs: { x: number; y: number }[] = [];
+
+      if (target.direction === "horizontal") {
+        // Влево
+        for (let nx = fx - 1; nx >= 0; nx--) {
+          dirs.push({ x: nx, y: fy });
+        }
+        // Вправо
+        for (let nx = fx + 1; nx < BOARD_SIZE; nx++) {
+          dirs.push({ x: nx, y: fy });
+        }
+      } else {
+        // Вверх
+        for (let ny = fy - 1; ny >= 0; ny--) {
+          dirs.push({ x: fx, y: ny });
+        }
+        // Вниз
+        for (let ny = fy + 1; ny < BOARD_SIZE; ny++) {
+          dirs.push({ x: fx, y: ny });
+        }
+      }
+
+      // Ищем первую доступную клетку в линии
+      for (const cell of dirs) {
+        if (!inBounds(cell.x, cell.y)) continue;
+        if (isTried(state, cell.x, cell.y)) continue;
+        if (!isCellAvailable(board, cell.x, cell.y)) continue;
+        return { x: cell.x, y: cell.y };
+      }
+
+      // Всё в линии tried — цель добита (или не найдена), удаляем
+      state.targets.pop();
+      if (state.targets.length === 0) state.mode = "hunt";
     }
 
-    // Направление определено — идём в текущую сторону
-    if (state.nextStep === -1) {
-      // Влево/вверх
-      const nx = state.direction === "horizontal" ? fx - 1 : fx;
-      const ny = state.direction === "vertical" ? fy - 1 : fy;
-      if (inBounds(nx, ny) && !isTried(state, nx, ny) && isCellAvailable(board, nx, ny)) {
-        return { x: nx, y: ny };
-      }
-      // Уперлись — переключаемся на другую сторону
-      state.nextStep = 1;
-    }
-    if (state.nextStep === 1) {
-      // Вправо/вниз
-      const nx = state.direction === "horizontal" ? fx + 1 : fx;
-      const ny = state.direction === "vertical" ? fy + 1 : fy;
-      if (inBounds(nx, ny) && !isTried(state, nx, ny) && isCellAvailable(board, nx, ny)) {
-        return { x: nx, y: ny };
-      }
-      // И там пусто — сбрасываемся в поиск
-      state.mode = "hunt";
-      state.firstHit = null;
-      state.direction = null;
-      state.nextStep = null;
+    // Если цели ещё есть — рекурсивно выбираем
+    if (state.targets.length > 0) {
+      return getAIShot(board, state);
     }
   }
 
@@ -204,7 +250,6 @@ export function getAIShot(
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
-// ===== Полный ход ИИ =====
 export function makeAITurn(
   board: Board,
   ships: Ship[],
@@ -223,25 +268,22 @@ export function makeAITurn(
   const outcome = processShot(board, ships, shot.x, shot.y);
   if (!outcome) return null;
 
-  // Определяем направление, если попадание второе по счёту
-  if (
-    outcome.result.hit &&
-    state.firstHit &&
-    state.direction === null &&
-    (shot.x !== state.firstHit.x || shot.y !== state.firstHit.y)
-  ) {
-    if (shot.y === state.firstHit.y) {
-      state.direction = "horizontal";
-    } else if (shot.x === state.firstHit.x) {
-      state.direction = "vertical";
-    }
-    // Сбрасываем nextStep, чтобы пойти в сторону первой попытки
-    state.nextStep = -1;
+  // Определяем клетки потопленного корабля
+  let sunkShipCells: { x: number; y: number }[] | undefined;
+  if (outcome.result.sunk && outcome.result.shipId) {
+    const sunkShip = outcome.newShips.find((s) => s.id === outcome.result.shipId);
+    sunkShipCells = sunkShip?.cells;
   }
 
-  updateAIAfterShot(state, shot.x, shot.y, outcome.result.hit, outcome.result.sunk);
+  updateAIAfterShot(
+    state,
+    shot.x,
+    shot.y,
+    outcome.result.hit,
+    outcome.result.sunk,
+    sunkShipCells
+  );
 
-  // Помечаем окружение потопленного корабля
   if (outcome.result.sunk && outcome.result.shipId) {
     markSunkSurroundings(state, outcome.newShips, outcome.result.shipId);
   }

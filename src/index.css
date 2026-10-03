@@ -1,12 +1,10 @@
 @import "tailwindcss";
 
-
-/* ===== Y2K Aqua: базовые настройки ===== */
+/* ===== Базовые настройки ===== */
 :root {
-  --aqua-glow: 0 0 12px rgba(34, 211, 238, 0.65);
-  --aqua-inset: inset 0 2px 6px rgba(255, 255, 255, 0.55),
-                inset 0 -3px 6px rgba(0, 0, 0, 0.35);
-  --aqua-shadow: 0 4px 10px rgba(0, 20, 40, 0.55);
+  --paper-line: rgba(80, 130, 200, 0.35);
+  --paper-line-bold: rgba(60, 110, 180, 0.55);
+  --paper-bg: #f8fbff;
 }
 
 html, body, #root {
@@ -15,42 +13,41 @@ html, body, #root {
 }
 
 body {
-  font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  font-family: "Caveat", "Comic Sans MS", cursive;
+  background-color: var(--paper-bg);
+  /* Фон «тетрадь в клетку» — только линии, без картинок */
+  background-image:
+    /* Вертикальные линии */
+    linear-gradient(to right, var(--paper-line) 1px, transparent 1px),
+    /* Горизонтальные линии */
+    linear-gradient(to bottom, var(--paper-line) 1px, transparent 1px),
+    /* Жирные линии (как в тетради через 5 клеток) */
+    linear-gradient(to right, var(--paper-line-bold) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--paper-line-bold) 1px, transparent 1px);
+  background-size:
+    20px 20px,
+    20px 20px,
+    100px 100px,
+    100px 100px;
+  background-position: 0 0;
 }
 
-/* Глянцевый блик сверху — общий класс для клеток и кнопок */
-.aqua-glass::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 5%;
-  width: 90%;
-  height: 40%;
-  border-radius: 9999px;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.75),
-    rgba(255, 255, 255, 0.05)
-  );
-  pointer-events: none;
+/* ===== Анимации ===== */
+@keyframes ink-fade {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
 }
+.ink-fade { animation: ink-fade 0.3s ease-out; }
 
-/* Мягкая пульсация для попаданий */
-@keyframes aqua-pulse {
-  0%, 100% { box-shadow: var(--aqua-glow); }
-  50%      { box-shadow: 0 0 22px rgba(248, 113, 113, 0.9); }
+@keyframes pop {
+  0%   { transform: scale(0.9); }
+  50%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
 }
-.aqua-pulse {
-  animation: aqua-pulse 1.2s ease-in-out infinite;
-}
+.pop { animation: pop 0.35s ease-out; }
 
-/* Лёгкое покачивание для потопленных кораблей */
-@keyframes aqua-sink {
-  0%   { transform: translateY(0);   filter: brightness(1); }
-  100% { transform: translateY(1px); filter: brightness(0.75); }
+@keyframes sink-fade {
+  from { opacity: 1; }
+  to   { opacity: 0.55; filter: grayscale(0.7); }
 }
-.aqua-sink {
-  animation: aqua-sink 0.6s ease-out forwards;
-}
-
+.sink-fade { animation: sink-fade 0.6s ease-out forwards; }
