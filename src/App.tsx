@@ -7,7 +7,8 @@ import type { Board as BoardType, Ship, CellState, Player } from "./types";
 function hideShips(board: BoardType): BoardType {
   return board.map((row) =>
     row.map((cell) => ({
-      ...cell,
+      x: cell.x,
+      y: cell.y,
       state: (cell.state === "ship" ? "unknown" : cell.state) as CellState,
     }))
   );

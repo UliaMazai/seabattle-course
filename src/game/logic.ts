@@ -56,7 +56,22 @@ function placeShip(
   for (let i = 0; i < size; i++) {
     const cx = orientation === "horizontal" ? x + i : x;
     const cy = orientation === "vertical" ? y + i : y;
+
     board[cy][cx].state = "ship";
+    board[cy][cx].shipSize = size;
+    board[cy][cx].shipOrientation = orientation;
+
+    // Определяем края (какие стороны — край корабля)
+    const isFirst = i === 0;
+    const isLast = i === size - 1;
+
+    board[cy][cx].shipEdges = {
+      top:    orientation === "vertical"   ? isFirst : true,
+      bottom: orientation === "vertical"   ? isLast  : true,
+      left:   orientation === "horizontal" ? isFirst : true,
+      right:  orientation === "horizontal" ? isLast  : true,
+    };
+
     cells.push({ x: cx, y: cy });
   }
 

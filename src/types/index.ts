@@ -6,6 +6,17 @@ export interface Cell {
   x: number;
   y: number;
   state: CellState;
+  // Какие стороны клетки — край корабля (для скругления)
+  shipEdges?: {
+    top: boolean;
+    bottom: boolean;
+    left: boolean;
+    right: boolean;
+  };
+  // Размер корабля, которому принадлежит клетка (для цвета)
+  shipSize?: number;
+  // Ориентация корабля (для правильных скруглений)
+  shipOrientation?: Orientation;
 }
 
 // Поле 10x10
