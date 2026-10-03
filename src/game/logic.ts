@@ -1,7 +1,7 @@
 import type { Board, Ship, Orientation, CellState, ShotResult } from "../types";
 import { BOARD_SIZE, FLEET } from "./constants";
 
-// ===== Создание пустого поля =====
+// Создание пустого поля
 export function createEmptyBoard(): Board {
   return Array.from({ length: BOARD_SIZE }, (_, y) =>
     Array.from({ length: BOARD_SIZE }, (_, x) => ({
@@ -12,7 +12,7 @@ export function createEmptyBoard(): Board {
   );
 }
 
-// ===== Проверка: можно ли поставить корабль =====
+// Проверка: можно ли поставить корабль
 function canPlaceShip(
   board: Board,
   x: number,
@@ -29,7 +29,7 @@ function canPlaceShip(
     const cx = orientation === "horizontal" ? x + i : x;
     const cy = orientation === "vertical" ? y + i : y;
 
-    // Проверяем квадрат 3×3 вокруг клетки корабля
+    // Проверка квадрат 3×3 вокруг клетки корабля
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const nx = cx + dx;
@@ -42,7 +42,7 @@ function canPlaceShip(
   return true;
 }
 
-// ===== Поставить корабль на поле =====
+// Поставить корабль на поле
 function placeShip(
   board: Board,
   x: number,
@@ -63,7 +63,7 @@ function placeShip(
   return { id: shipId, size, cells, orientation, sunk: false };
 }
 
-// ===== Попытка расставить весь флот один раз =====
+// Попытка расставить весь флот один раз
 function tryPlaceFleet(): { board: Board; ships: Ship[] } | null {
   const board = createEmptyBoard();
   const ships: Ship[] = [];
@@ -93,7 +93,7 @@ function tryPlaceFleet(): { board: Board; ships: Ship[] } | null {
   return { board, ships };
 }
 
-// ===== Публичная функция: расставить флот (с повторами) =====
+// Публичная функция: расставить флот (с повторами)
 export function generateFleet(): { board: Board; ships: Ship[] } {
   while (true) {
     const result = tryPlaceFleet();
@@ -102,7 +102,7 @@ export function generateFleet(): { board: Board; ships: Ship[] } {
   }
 }
 
-// ===== Обработка выстрела по полю =====
+// Обработка выстрела по полю
 export function processShot(
   board: Board,
   ships: Ship[],
@@ -116,7 +116,7 @@ export function processShot(
     return null; // повторный выстрел — игнорируем
   }
 
-  // 2. Копия поля (React требует иммутабельности)
+  // 2. Копия поля
   const newBoard: Board = board.map((row) => row.map((c) => ({ ...c })));
   const newShips: Ship[] = ships.map((s) => ({ ...s, cells: [...s.cells] }));
 
@@ -134,13 +134,12 @@ export function processShot(
   if (cell.state === "ship") {
     newBoard[y][x].state = "hit";
 
-    // 4.1. Ищем корабль, в который попали
+    // Ищем корабль, в который попали
     const ship = newShips.find((s) =>
       s.cells.some((c) => c.x === x && c.y === y)
     );
 
     if (!ship) {
-      // Странная ситуация — не должно случаться, но подстрахуемся
       return {
         newBoard,
         newShips,
@@ -148,7 +147,7 @@ export function processShot(
       };
     }
 
-    // 4.2. Проверяем, потоплен ли корабль
+    // Проверяем, потоплен ли корабль
     const allHit = ship.cells.every((c) => newBoard[c.y][c.x].state === "hit");
 
     if (allHit) {
@@ -176,7 +175,7 @@ export function processShot(
   return null;
 }
 
-// ===== Проверка победы =====
+// Проверка победы
 export function isFleetDestroyed(ships: Ship[]): boolean {
   return ships.every((s) => s.sunk);
 }

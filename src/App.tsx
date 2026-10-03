@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Board } from "./components/Board";
 import { generateFleet, processShot, isFleetDestroyed } from "./game/logic";
+import { createAIState, makeAITurn, type AIState } from "./game/ai";
 import type { Board as BoardType, Ship, CellState, Player } from "./types";
 
 function hideShips(board: BoardType): BoardType {
@@ -19,8 +20,11 @@ function App() {
   const [enemyShips, setEnemyShips] = useState<Ship[]>([]);
   const [turn, setTurn] = useState<Player>("human");
   const [message, setMessage] = useState<string>("Сделайте выстрел по полю противника");
+  const [gameOver, setGameOver] = useState(false);
 
-  // Новая игра
+  const aiStateRef = useRef<AIState>(createAIState());
+
+  // ===== Новая игра =====
   function newGame() {
     const player = generateFleet();
     const enemy = generateFleet();
@@ -30,42 +34,86 @@ function App() {
     setEnemyShips(enemy.ships);
     setTurn("human");
     setMessage("Сделайте выстрел по полю противника");
+    setGameOver(false);
+    aiStateRef.current = createAIState();
   }
 
-  // Выстрел игрока
+  // Инициализация при первом рендере
+  useEffect(() => {
+    if (playerShips.length === 0) newGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ===== Ход ИИ: рекурсивно, пока попадает =====
+  function runAITurn(currentPlayerBoard: BoardType, currentPlayerShips: Ship[]) {
+    const aiTurn = makeAITurn(currentPlayerBoard, currentPlayerShips, aiStateRef.current);
+    if (!aiTurn) return;
+
+    setPlayerBoard(aiTurn.newBoard);
+    setPlayerShips(aiTurn.newShips);
+
+    // Проверка победы ИИ
+    if (isFleetDestroyed(aiTurn.newShips)) {
+      setMessage("💀 Вы проиграли. Весь ваш флот уничтожен.");
+      setGameOver(true);
+      return;
+    }
+
+    if (aiTurn.hit) {
+      setMessage(
+        aiTurn.sunk
+          ? "🔥 Противник потопил ваш корабль. Его ход."
+          : "💥 Противник попал. Его ход."
+      );
+      // ИИ попал — он ходит ещё раз. Рекурсия через setTimeout,
+      // чтобы игрок увидел результат предыдущего выстрела.
+      setTimeout(() => runAITurn(aiTurn.newBoard, aiTurn.newShips), 700);
+    } else {
+      setMessage("💧 Противник промахнулся. Ваш ход.");
+      setTurn("human");
+    }
+  }
+
+  // ===== Выстрел игрока =====
   function handleEnemyBoardClick(x: number, y: number) {
-    if (turn !== "human") return;
+    if (turn !== "human" || gameOver) return;
 
     const outcome = processShot(enemyBoard, enemyShips, x, y);
-    if (!outcome) return; // уже стреляли
+    if (!outcome) return;
 
     setEnemyBoard(outcome.newBoard);
     setEnemyShips(outcome.newShips);
 
     if (isFleetDestroyed(outcome.newShips)) {
       setMessage("🏆 Вы победили! Весь флот противника уничтожен.");
-      setTurn("ai"); // блокируем ходы
+      setGameOver(true);
       return;
     }
 
     if (outcome.result.hit) {
-      setMessage(outcome.result.sunk ? "🔥 Корабль потоплен! Ваш ход снова." : "💥 Попадание! Ваш ход снова.");
-      // При попадании ход остаётся у игрока
+      setMessage(
+        outcome.result.sunk
+          ? "🔥 Корабль потоплен! Ваш ход снова."
+          : "💥 Попадание! Ваш ход снова."
+      );
+      // Ход остаётся у игрока
     } else {
-      setMessage("💧 Промах. Ход противника.");
+      setMessage("💧 Промах. Ход противника...");
       setTurn("ai");
-      // Заглушка ИИ — реализуем в 5.3
-      setTimeout(() => {
-        setMessage("Сделайте выстрел по полю противника");
-        setTurn("human");
-      }, 1000);
     }
   }
 
-  // Инициализация: если флот пуст — сгенерировать
-  if (playerShips.length === 0 || enemyShips.length === 0) {
-    newGame();
-  }
+  // ===== Запуск хода ИИ, когда turn === "ai" =====
+  useEffect(() => {
+    if (turn !== "ai" || gameOver) return;
+
+    const timer = setTimeout(() => {
+      runAITurn(playerBoard, playerShips);
+    }, 700);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turn, gameOver]);
 
   return (
     <div
@@ -109,7 +157,6 @@ function App() {
         </button>
       </div>
 
-      {/* Статус-строка */}
       <p className="relative z-10 text-center text-cyan-100 mb-6 text-lg font-semibold drop-shadow">
         {message}
       </p>
@@ -120,7 +167,7 @@ function App() {
           board={hideShips(enemyBoard)}
           title="Поле противника"
           onCellClick={handleEnemyBoardClick}
-          disabled={turn !== "human"}
+          disabled={turn !== "human" || gameOver}
         />
       </div>
     </div>
