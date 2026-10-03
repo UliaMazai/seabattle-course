@@ -8,11 +8,12 @@ interface CellProps {
 }
 
 const stateStyles: Record<CellState, string> = {
-  empty: `${COLORS.water} hover:brightness-125`,
-  ship:  `${COLORS.ship}  hover:brightness-110`,
-  hit:   `${COLORS.hit}   aqua-pulse`,
-  miss:  `${COLORS.miss}  opacity-80`,
-  sunk:  `${COLORS.sunk}  aqua-sink`,
+  empty:   `${COLORS.water} hover:brightness-125`,
+  unknown: `${COLORS.water} hover:brightness-125`,
+  ship:    `${COLORS.ship}  hover:brightness-110`,
+  hit:     `${COLORS.hit}   aqua-pulse`,
+  miss:    `${COLORS.miss}  opacity-80`,
+  sunk:    `${COLORS.sunk}  aqua-sink`,
 };
 
 export function Cell({ state, onClick, disabled }: CellProps) {

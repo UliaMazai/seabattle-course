@@ -1,5 +1,5 @@
 // Состояние одной клетки
-export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk';
+export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk' | 'unknown';
 
 // Клетка поля
 export interface Cell {
